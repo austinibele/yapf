@@ -38,18 +38,15 @@ import sys
 
 from yapf.pytree import pytree_unwrapper
 from yapf.pytree import pytree_utils
-from yapf.pytree import blank_line_calculator
-from yapf.pytree import comment_splicer
-from yapf.pytree import continuation_splicer
-from yapf.pytree import split_penalty
-from yapf.pytree import subtype_assigner
+from src.docstring_adder import DocstringAdder
+
+
+
 from yapf.yapflib import errors
 from yapf.yapflib import file_resources
-from yapf.yapflib import identify_container
 from yapf.yapflib import py3compat
 from yapf.yapflib import reformatter
 from yapf.yapflib import style
-
 
 def FormatFile(filename,
                style_config=None,
@@ -132,12 +129,8 @@ def FormatTree(tree, style_config=None, lines=None, verify=False):
   style.SetGlobalStyle(style.CreateStyleFromConfig(style_config))
 
   # Run passes on the tree, modifying it in place.
-  comment_splicer.SpliceComments(tree)
-  continuation_splicer.SpliceContinuations(tree)
-  subtype_assigner.AssignSubtypes(tree)
-  identify_container.IdentifyContainers(tree)
-  split_penalty.ComputeSplitPenalties(tree)
-  blank_line_calculator.CalculateBlankLines(tree)
+  adder = DocstringAdder()
+  adder.AddDocstrings(tree)
 
   llines = pytree_unwrapper.UnwrapPyTree(tree)
   for lline in llines:
