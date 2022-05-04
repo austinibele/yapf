@@ -1,31 +1,10 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""Comment splicer for lib2to3 trees.
-
-The lib2to3 syntax tree produced by the parser holds comments and whitespace in
-prefix attributes of nodes, rather than nodes themselves. This module provides
-functionality to splice comments out of prefixes and into nodes of their own,
-making them easier to process.
-
-  SpliceComments(): the main function exported by this module.
-"""
-
-from lib2to3 import pygram
 from lib2to3 import pytree
-from lib2to3.pgen2 import token
-from yapf.pytree import pytree_utils
+
+from pytest import param
 from src.param_finder import ParamFinder
+from yapf.pytree import pytree_utils
+from yapf.yapflib import file_resources
+from yapf.yapflib import py3compat
 
 class DocstringAdder:
   def __init__(self):
@@ -34,24 +13,6 @@ class DocstringAdder:
     self.columns = []
     self.param_finder = ParamFinder()
       
-  def AddDocstrings(self, tree):
-    """Given a pytree, splice comments into nodes of their own right.
-
-    Extract comments from the prefixes where they are housed after parsing.
-    The prefixes that previously housed the comments become empty.
-
-    Args:
-      tree: a pytree.Node - the tree to work on. The tree is modified by this
-          function.
-    """
-    # The previous leaf node encountered in the traversal.
-    # This is a list because Python 2.x doesn't have 'nonlocal' :)
-    
-    self._find_def_start_lines(tree)
-    self._get_tups(tree)
-
-    self.param_finder(start_lines = self.start_lines, tups = self.tups)
-
 
   def _get_tups(self, node):
     for i, child in enumerate(node.children[:]):
@@ -78,4 +39,62 @@ class DocstringAdder:
             self.start_lines.append(int(child.lineno))
             self.columns.append(child.column)
 
+  def __call__(self, filename):
+    """Given a pytree, splice comments into nodes of their own right.
+
+    Extract comments from the prefixes where they are housed after parsing.
+    The prefixes that previously housed the comments become empty.
+
+    Args:
+      tree: a pytree.Node - the tree to work on. The tree is modified by this
+          function.
+    """
+    original_source, newline, encoding = ReadFile(filename, logger=None)
+    tree = pytree_utils.ParseCodeToTree(original_source)
+    self._find_def_start_lines(tree)
+    self._get_tups(tree)
+    params_list, end_lines = self.param_finder(start_lines=self.start_lines, tups=self.tups)
+    return params_list, end_lines, self.columns
     
+
+
+def ReadFile(filename, logger=None):
+  """Read the contents of the file.
+
+  An optional logger can be specified to emit messages to your favorite logging
+  stream. If specified, then no exception is raised. This is external so that it
+  can be used by third-party applications.
+
+  Arguments:
+    filename: (unicode) The name of the file.
+    logger: (function) A function or lambda that takes a string and emits it.
+
+  Returns:
+    The contents of filename.
+
+  Raises:
+    IOError: raised if there was an error reading the file.
+  """
+  try:
+    encoding = file_resources.FileEncoding(filename)
+
+    # Preserves line endings.
+    with py3compat.open_with_encoding(
+        filename, mode='r', encoding=encoding, newline='') as fd:
+      lines = fd.readlines()
+
+    line_ending = file_resources.LineEnding(lines)
+    source = '\n'.join(line.rstrip('\r\n') for line in lines) + '\n'
+    return source, line_ending, encoding
+  except IOError as e:  # pragma: no cover
+    if logger:
+      logger(e)
+    e.args = (e.args[0], (filename, e.args[1][1], e.args[1][2], e.args[1][3]))
+    raise
+  except UnicodeDecodeError as e:  # pragma: no cover
+    if logger:
+      logger('Could not parse %s! Consider excluding this file with --exclude.',
+             filename)
+      logger(e)
+    e.args = (e.args[0], (filename, e.args[1][1], e.args[1][2], e.args[1][3]))
+    raise

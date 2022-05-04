@@ -38,7 +38,7 @@ import sys
 
 from yapf.pytree import pytree_unwrapper
 from yapf.pytree import pytree_utils
-from src.docstring_adder import DocstringAdder
+# from src.docstring_adder import DocstringAdder
 
 
 
@@ -47,6 +47,8 @@ from yapf.yapflib import file_resources
 from yapf.yapflib import py3compat
 from yapf.yapflib import reformatter
 from yapf.yapflib import style
+
+import pickle
 
 def FormatFile(filename,
                style_config=None,
@@ -129,6 +131,8 @@ def FormatTree(tree, style_config=None, lines=None, verify=False):
   style.SetGlobalStyle(style.CreateStyleFromConfig(style_config))
 
   # Run passes on the tree, modifying it in place.
+  file = open('tests/tree.pickle', 'w')
+  pickle.dump(tree, file)
   adder = DocstringAdder()
   adder.AddDocstrings(tree)
 
